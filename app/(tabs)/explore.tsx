@@ -14,7 +14,7 @@ export default function TabTwoScreen() {
     : Math.min(width * 0.8, height * 0.8, 500); // Mobile: 80% of screen, max 500px
 
   console.log("Chessboard Size:", chessboardSize); // ✅ Debugging Output
-
+// help why does it now resize for the web?
   return (
     <GestureHandlerRootView style={styles.container}>
       <View style={[styles.chessboardContainer, { width: chessboardSize, height: chessboardSize }]}>
