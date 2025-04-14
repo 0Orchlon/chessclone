@@ -1,38 +1,104 @@
-import { StyleSheet, View, useWindowDimensions, Platform } from "react-native";
-import { GestureHandlerRootView } from "react-native-gesture-handler";
-import Chessboard, { ChessboardRef } from "react-native-chessboard";
-import { useRef } from "react";
+import React, { useState, useEffect } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, FlatList, Alert } from 'react-native';
+import { io } from 'socket.io-client';
+import { useNavigation } from '@react-navigation/native'; // Import useNavigation
 
-export default function TabTwoScreen() {
-  const { width, height } = useWindowDimensions();
-  const chessboardRef = useRef<ChessboardRef>(null);
+const socket = io('http://192.168.0.161:3001'); // Replace with your server's IP
 
-  // ✅ STRICT SIZE LIMIT for Web (Fixed issue)
-  const chessboardSize =
-  Platform.OS === "web"
-    ? Math.min(width * 0.2, height * 0.2, 180) // Web: 20% of screen, max 180px
-    : Math.min(width * 0.8, height * 0.8, 500); // Mobile: 80% of screen, max 500px
+const Explore = () => {
+  const navigation = useNavigation(); // Use useNavigation to get access to navigation
+  const [matches, setMatches] = useState<string[]>([]);
+  socket.on('matchJoined', (matchId) => {
+    setMatchId(matchId);
+    setIsHost(false);
+    setPlayerColor('b'); // Player 2 is black
+  });
+  useEffect(() => {
+    // Listen for updates on match list
+    socket.on('matchList', (matchIds: string[]) => {
+      setMatches(matchIds);
+    });
 
-  console.log("Chessboard Size:", chessboardSize); // ✅ Debugging Output
-// help why does it now resize for the web?
+    // Request current available matches when component mounts
+    socket.emit('getMatches');
+
+    // Cleanup on unmount
+    return () => {
+      socket.off('matchList');
+    };
+  }, []);
+
+  const handleJoinMatch = (matchId: string) => {
+    socket.emit('joinMatch', matchId);
+
+    // Listen for 'matchJoined' event from the server
+    socket.on('matchJoined', (id: string) => {
+      // On successful join, navigate to the game screen
+      navigation.navigate('Index', { matchId: id });
+    });
+
+    // Handle error messages
+    socket.on('error', (message: string) => {
+      Alert.alert('Error', message);
+    });
+  };
+
+  useEffect(() => {
+    // Listen for new match created
+    socket.on('matchCreated', (newMatchId: string) => {
+      // After creating a match, fetch the updated list of matches
+      socket.emit('getMatches');
+    });
+
+    // Cleanup on unmount
+    return () => {
+      socket.off('matchCreated');
+    };
+  }, []);
+
   return (
-    <GestureHandlerRootView style={styles.container}>
-      <View style={[styles.chessboardContainer, { width: chessboardSize, height: chessboardSize }]}>
-        <Chessboard ref={chessboardRef} durations={{ move: 1 }} />
-      </View>
-    </GestureHandlerRootView>
+    <View style={styles.container}>
+      <Text style={styles.title}>Available Matches</Text>
+
+      <FlatList
+        data={matches}
+        keyExtractor={(item) => item}
+        renderItem={({ item }) => (
+          <TouchableOpacity
+            style={styles.button}
+            onPress={() => handleJoinMatch(item)}
+          >
+            <Text style={styles.buttonText}>Join Match {item}</Text>
+          </TouchableOpacity>
+        )}
+      />
+    </View>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f4f4f4',
+    padding: 20,
   },
-  chessboardContainer: {
-    aspectRatio: 1, // ✅ Ensures a square
-    justifyContent: "center",
-    alignItems: "center",
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 20,
+  },
+  button: {
+    backgroundColor: '#007bff',
+    padding: 10,
+    margin: 10,
+    borderRadius: 5,
+  },
+  buttonText: {
+    color: '#fff',
+    fontSize: 18,
   },
 });
+
+export default Explore;
